@@ -1,4 +1,5 @@
 const Notification = require('../models/Notification');
+const Patient = require('../models/Patient');
 
 // Create a new notification
 exports.createNotification = async (req, res) => {
@@ -24,7 +25,10 @@ exports.getNotifications = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const notifications = await Notification.find({ user: userId }).sort({ timestamp: -1 });
+    const notifications = await Notification.find({ user: userId })
+      .sort({ timestamp: -1 })
+      .populate('user', 'name'); // Populate patient name
+
     res.status(200).json({ success: true, notifications });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

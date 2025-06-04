@@ -12,30 +12,55 @@ import { useSelector } from "react-redux";
 import axiosInstance from "@/utils/axiosInstance";
 import * as SecureStore from "expo-secure-store";
 
-const stats = [
-  { id: "1", title: "Total Patients", value: 200 },
-  { id: "2", title: "Scheduled Appointments", value: 10 },
-  { id: "3", title: "Messages", value: 3 },
-];
-
-const patientNotifications = [
-  {
-    id: "1",
-    message: "Patient John Doe requested an appointment for 2023-05-12.",
-  },
-  {
-    id: "2",
-    message: "Patient Jane Smith has completed the latest health check.",
-  },
-  { id: "3", message: "Patient Emily Clark needs a follow-up consultation." },
-];
-
-const healthTip =
-  "Remember to encourage your patients to stay hydrated, especially in warmer weather!";
-
 export default function HomeScreen() {
   const { user, isHydrated } = useSelector((state) => state.doctorAuth);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
+  const [stats, setStats] = useState([]);
+  const [patientNotifications, setPatientNotifications] = useState([]);
+  const [healthTip, setHealthTip] = useState("");
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = await SecureStore.getItemAsync("doctorToken");
+        if (!token) {
+          console.error("No token found for doctor");
+          return;
+        }
+
+        // Fetch stats
+        const statsResponse = await axiosInstance.get("/api/stats", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        setStats(statsResponse.data);
+
+        // Fetch patient notifications
+        const notificationsResponse = await axiosInstance.get(
+          "/api/notifications",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setPatientNotifications(notificationsResponse.data);
+
+        // Fetch health tip
+        const healthTipResponse = await axiosInstance.get("/api/health-tip", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        setHealthTip(healthTipResponse.data);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -118,6 +143,8 @@ export default function HomeScreen() {
           {patientNotifications.map((item) => (
             <TouchableOpacity key={item.id} style={styles.notificationItem}>
               <Text style={styles.notificationText}>{item.message}</Text>
+              <Text style={styles.notificationDetails}>Date: {new Date().toLocaleDateString()}</Text>
+              <Text style={styles.notificationDetails}>Time: {new Date().toLocaleTimeString()}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -237,6 +264,11 @@ const styles = StyleSheet.create({
   notificationText: {
     fontSize: 14,
     color: "#333",
+  },
+  notificationDetails: {
+    fontSize: 12,
+    color: "#777",
+    marginTop: 4,
   },
   notificationsList: {
     marginBottom: 20,
