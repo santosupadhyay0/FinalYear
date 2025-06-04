@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   SafeAreaView,
   Text,
@@ -6,21 +6,16 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Image,
   ScrollView,
 } from "react-native";
 import { useSelector } from "react-redux";
+import axiosInstance from "@/utils/axiosInstance";
+import * as SecureStore from "expo-secure-store";
 
 const stats = [
   { id: "1", title: "Total Patients", value: 200 },
   { id: "2", title: "Scheduled Appointments", value: 10 },
   { id: "3", title: "Messages", value: 3 },
-];
-
-const upcomingAppointments = [
-  { id: "1", patient: "John Doe", date: "2023-05-12", time: "10:00 AM" },
-  { id: "2", patient: "Jane Smith", date: "2023-05-14", time: "2:00 PM" },
-  { id: "3", patient: "Emily Clark", date: "2023-05-15", time: "11:30 AM" },
 ];
 
 const patientNotifications = [
@@ -39,20 +34,47 @@ const healthTip =
   "Remember to encourage your patients to stay hydrated, especially in warmer weather!";
 
 export default function HomeScreen() {
-  
-  const { user, isHydrated } = useSelector((state) => state.auth);
+  const { user, isHydrated } = useSelector((state) => state.doctorAuth);
+  const [upcomingAppointments, setUpcomingAppointments] = useState([]);
+
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      try {
+        const token = await SecureStore.getItemAsync("doctorToken");
+        if (!token) {
+          console.error("No token found for doctor");
+          return;
+        }
+
+        const response = await axiosInstance.get("/api/appointments/doctor", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        setUpcomingAppointments(response.data);
+      } catch (error) {
+        console.error("Error fetching appointments:", error);
+      }
+    };
+
+    fetchAppointments();
+  }, []);
 
   if (!isHydrated) return null;
-  // console.log(user)
+  if (!user) {
+    return <Text>Please Login</Text>;
+  }
+
   return (
     <SafeAreaView>
       <ScrollView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerText}>
-            <Text style={styles.welcomeText}>Good Morning,{user.name} </Text>
+            <Text style={styles.welcomeText}>Good Morning, {user.name}</Text>
             <Text style={styles.specialization}>
-              Specialization:{user.specialization}
+              Specialization: {user.specialization}
             </Text>
           </View>
         </View>
@@ -78,11 +100,14 @@ export default function HomeScreen() {
         <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
         <View style={styles.appointmentsList}>
           {upcomingAppointments.map((item) => (
-            <TouchableOpacity key={item.id} style={styles.appointmentItem}>
-              <Text style={styles.appointmentPatient}>{item.patient}</Text>
+            <TouchableOpacity key={item._id} style={styles.appointmentItem}>
+              <Text style={styles.appointmentPatient}>{item.userId.name}</Text>
               <Text style={styles.appointmentDetails}>
-                {item.date} - {item.time}
+                {new Date(item.date).toLocaleDateString()} -{" "}
+                {new Date(item.date).toLocaleTimeString()}
               </Text>
+              {/* Add the reason for the appointment in the display */}
+              <Text style={styles.appointmentDetails}>Reason: {item.reason}</Text>
             </TouchableOpacity>
           ))}
         </View>

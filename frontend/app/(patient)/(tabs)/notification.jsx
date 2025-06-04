@@ -1,125 +1,177 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Ionicons, MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+} from "react-native";
+import { useDispatch, useSelector } from "react-redux";
+import { addNotification } from "@/redux/slices/notificationSlice";
+import axiosInstance from '@/utils/axiosInstance';
+import * as Notifications from 'expo-notifications';
 
-export default function NotificationsScreen() {
-  const notifications = [
-    {
-      id: 1,
-      title: 'Upcoming Checkup',
-      message: 'You have a checkup scheduled on May 15th at 10:00 AM.',
-      time: '2h ago',
-      icon: 'calendar-outline',
-      type: 'reminder',
-      read: false,
-    },
-    {
-      id: 2,
-      title: 'Daily Health Tip',
-      message: 'Drink 2L of water today and take 30 min walk 🚶‍♀️',
-      time: '6h ago',
-      icon: 'heart-circle-outline',
-      type: 'tip',
-      read: false,
-    },
-    {
-      id: 3,
-      title: 'Emergency Alert',
-      message: 'High blood pressure detected. Please consult a doctor immediately!',
-      time: '1d ago',
-      icon: 'alert-circle-outline',
-      type: 'alert',
-      read: true,
-    },
-    {
-      id: 4,
-      title: 'New Message from Dr. Sharma',
-      message: 'Hey! Please update your blood sugar readings before tomorrow.',
-      time: '2d ago',
-      icon: 'chatbox-ellipses-outline',
-      type: 'message',
-      read: true,
-    },
-  ];
+const NotificationScreen = () => {
+  const dispatch = useDispatch(); 
+  const {notifications} = useSelector(
+    (state) => state.notifications
+  );
+  const { user } = useSelector((state) => state.patientAuth);
+  const userId = user?._id;
+  const [expoPushToken, setExpoPushToken] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
-  const getColorByType = (type) => {
-    switch (type) {
-      case 'reminder':
-        return '#34d399';
-      case 'alert':
-        return '#f87171';
-      case 'tip':
-        return '#60a5fa';
-      case 'message':
-        return '#facc15';
-      default:
-        return '#d1d5db';
+  useEffect(() => {
+    if (!userId) return;
+
+    const fetchNotifications = async () => {
+      try {
+        const response = await axiosInstance.get(`/api/notifications/${userId}`);
+        console.log('Fetched notifications:', response.data.notifications); // Log the fetched notifications
+        response.data.notifications.forEach((notification) => {
+          dispatch(addNotification(notification));
+        });
+        console.log('Redux state notifications:', notifications); // Log Redux state notifications
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
+      }
+    };
+
+    fetchNotifications();
+  }, [dispatch, userId]);
+
+  useEffect(() => { 
+    registerForPushNotificationsAsync().then(token => setExpoPushToken(token));
+
+    const subscription = Notifications.addNotificationReceivedListener((notification) => {
+      dispatch(addNotification({
+        id: notification.request.identifier,
+        title: notification.request.content.title,
+        body: notification.request.content.body,
+      }));
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  const registerForPushNotificationsAsync = async () => {
+    let token;
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') {
+        console.log('Notification permission not granted');
+        return;
+      }
+
+      token = (await Notifications.getExpoPushTokenAsync({ projectId: 'a1ee8245-6e10-4164-a315-4d9e616f1bc7' })).data;
+      console.log('Push notification token:', token);
+    } catch (error) {
+      console.error('Error getting push notification token:', error);
+    }
+
+    return token;
+  };
+
+  const markAsRead = async (notificationId) => {
+    try {
+      await axiosInstance.patch(`/api/notifications/${notificationId}`);
+      // Optionally, update the Redux state to reflect the read status
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const response = await axiosInstance.get(`/api/notifications/${userId}`);
+      console.log('Refreshed notifications:', response.data.notifications);
+      dispatch({ type: 'notifications/setNotifications', payload: response.data.notifications });
+    } catch (error) {
+      console.error('Error refreshing notifications:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const renderNotification = ({ item }) => {
+    console.log('Rendering notification:', item); // Log each notification being rendered
+
+    return (
+      <TouchableOpacity
+        style={styles.notificationItem}
+        onPress={() => markAsRead(item._id)}
+      >
+        <Text style={styles.notificationType}>{item.type ? item.type.toUpperCase() : 'GENERAL'}</Text>
+        <Text style={styles.notificationMessage}>{item.message || 'No additional details available'}</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  console.log('Notifications in Redux state:', notifications); // Log notifications array in Redux state
+
   return (
-    <ScrollView style={styles.container}>
-      {notifications.map((n) => (
-        <TouchableOpacity key={n.id} style={[styles.card, !n.read && styles.unreadCard]}>
-          <View style={styles.iconContainer}>
-            <Ionicons name={n.icon} size={28} color={getColorByType(n.type)} />
-          </View>
-          <View style={styles.content}>
-            <Text style={styles.title}>{n.title}</Text>
-            <Text style={styles.message}>{n.message}</Text>
-            <Text style={styles.time}>{n.time}</Text>
-          </View>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+    <View style={styles.container}>
+      {notifications.length === 0 ? (
+        <Text style={styles.noNotifications}>No notifications yet</Text>
+      ) : (
+        <FlatList
+          data={notifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))} // Sort notifications by timestamp, newest first
+          keyExtractor={(item, index) => `${item._id}-${index}`}
+          renderItem={renderNotification}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+        />
+      )}
+    </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#f9fafb',
     flex: 1,
     padding: 20,
-  },
-  header: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 16,
-    color: '#111827',
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    flexDirection: 'row',
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  unreadCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#6366f1',
-  },
-  iconContainer: {
-    marginRight: 14,
-    justifyContent: 'center',
-  },
-  content: {
-    flex: 1,
+    backgroundColor: "#f9fafb",
   },
   title: {
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: "700",
+    marginBottom: 20,
+    color: "#1f2937",
+  },
+  noNotifications: {
     fontSize: 16,
-    color: '#1f2937',
+    color: "#6b7280",
+    textAlign: "center",
+    marginTop: 20,
   },
-  message: {
+  notificationItem: {
+    padding: 15,
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  notificationType: {
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  notificationMessage: {
     fontSize: 14,
-    color: '#4b5563',
-    marginVertical: 4,
-  },
-  time: {
-    fontSize: 12,
-    color: '#9ca3af',
+    color: "#555",
   },
 });
+
+export default NotificationScreen;

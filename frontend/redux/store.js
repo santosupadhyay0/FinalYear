@@ -1,12 +1,22 @@
 import { configureStore } from '@reduxjs/toolkit'
-import authReducer from '@/redux/slices/authSlice'
+import { createLogger } from 'redux-logger';
+import doctorAuthReducer from '@/redux/slices/doctorAuthSlice'
+import patientAuthReducer from '@/redux/slices/patientAuthSlice'
+import notificationReducer from '@/redux/slices/notificationSlice'
 import chatReducer from '@/redux/slices/chatSlice'
+
+const logger = createLogger({
+  collapsed: true,
+});
 
  const store = configureStore ({
     reducer: {
-        auth : authReducer,
-        chat:chatReducer
-    }
+        doctorAuth : doctorAuthReducer,
+        patientAuth : patientAuthReducer,
+        chat:chatReducer,
+        notifications:notificationReducer,
+    },
+    middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(logger),
 })
 
 export default store

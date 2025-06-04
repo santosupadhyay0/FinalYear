@@ -46,3 +46,24 @@ exports.triggerSOS = async (req, res) => {
     res.status(500).json({ error: 'Emergency failed. Try again!' });
   }
 };
+
+exports.sendEmergencyAlert = async (req, res) => {
+  const { message, contacts } = req.body;
+
+  if (!message || !contacts || contacts.length === 0) {
+    return res.status(400).json({ error: 'Message and contacts are required.' });
+  }
+
+  try {
+    const alert = new EmergencyAlert({ message, contacts });
+    await alert.save();
+
+    // Simulate sending alerts to contacts (e.g., via SMS or push notifications)
+    console.log(`Emergency alert sent to: ${contacts.join(', ')}`);
+
+    res.status(200).json({ message: 'Emergency alert sent successfully.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to send emergency alert.' });
+  }
+};

@@ -1,12 +1,83 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, Button, Alert, ScrollView, TouchableOpacity } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons, FontAwesome6, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import axiosInstance from '@/utils/axiosInstance';
+import { useSelector } from 'react-redux';
+
+// Configure notifications
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+const scheduleNotification = (title, body, date) => {
+  Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+    },
+    trigger: { type: 'date', date }, // Updated to use the new trigger format
+  });
+};
 
 export default function HealthDashboard() {
   const router = useRouter();
 
+  const { user } = useSelector((state)=>state.patientAuth)
+
+  const [reminderType, setReminderType] = useState('');
+  const [date, setDate] = useState(new Date());
+  const [showPicker, setShowPicker] = useState(false);
+
   const goToRecord = (recordType) => {
     router.push(`/health/${recordType}`);
+  };
+
+  const handleSetReminder = async () => {
+    if (!reminderType) {
+      Alert.alert('Error', 'Please enter a reminder type.');
+      return;
+    }
+
+    try {
+      // Replace 'userId' with the actual user ID from auth state
+      const userId = user._id; // Fetch this dynamically from auth state
+
+      // Save reminder to the backend
+      await axiosInstance.post('/api/notifications', {
+        user: userId, // Use the actual user ID
+        type: 'medicine', // Use a valid enum value
+        message: `Reminder for ${reminderType} set for ${date.toLocaleString()}`,
+        timestamp: date.toISOString(), // Ensure date is in ISO format
+      });
+
+      // Instant notification
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Reminder Set',
+          body: `Reminder for ${reminderType} set for ${date.toLocaleString()}`,
+        },
+        trigger: null,
+      });
+
+      // Scheduled notification
+      scheduleNotification(
+        'Reminder Alert',
+        `It's time for your ${reminderType}!`,
+        date
+      );
+
+      Alert.alert('Reminder Set', `Reminder for ${reminderType} set for ${date.toLocaleString()}`);
+      setReminderType('');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to set reminder. Please try again.');
+    }
   };
 
   return (
@@ -20,14 +91,14 @@ export default function HealthDashboard() {
         <VitalCard icon="thermometer" label="Temp" value="98.6" unit="°F" color="#fb923c" />
       </View>
       <View style={styles.cardsRow}>
-        <VitalCard icon="drop" label="Glucose" value="95" unit="mg/dL" color="#34d399" />
-        <VitalCard icon="scale-bathroom" label="Weight" value="62.5" unit="kg" color="#60a5fa" />
+        <VitalCard icon="heart" label="Glucose" value="95" unit="mg/dL" color="#34d399" />
+        <VitalCard icon="weight-scale" label="Weight" value="62.5" unit="kg" color="#60a5fa" />
       </View>
 
       {/* Add Record Buttons */}
       <Text style={styles.sectionTitle}>Quick Log</Text>
       <View style={styles.logRow}>
-        <LogButton label="Log BP" icon="blood-pressure" onPress={() => goToRecord('bp')} />
+        <LogButton label="Log BP" icon="heart" onPress={() => goToRecord('bp')} />
         <LogButton label="Log Weight" icon="weight" onPress={() => goToRecord('weight')} />
         <LogButton label="Log Sugar" icon="candycane" onPress={() => goToRecord('glucose')} />
       </View>
@@ -40,6 +111,36 @@ export default function HealthDashboard() {
         <View style={styles.trendChartPlaceholder}>
           <Text style={{ color: '#9ca3af' }}>📊 Graph Placeholder</Text>
         </View>
+      </View>
+
+      {/* Reminder Section */}
+      <View style={styles.reminderContainer}>
+        <Text style={styles.reminderTitle}>Set a Reminder</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Enter reminder type (e.g., Medicine, Appointment)"
+          value={reminderType}
+          onChangeText={setReminderType}
+        />
+
+        <Button title="Pick Date and Time" onPress={() => setShowPicker(true)} />
+
+        {showPicker && (
+          <DateTimePicker
+            value={date}
+            mode="datetime"
+            display="default"
+            onChange={(event, selectedDate) => {
+              setShowPicker(true);
+              if (selectedDate) {
+                setDate(selectedDate);
+              }
+            }}
+          />
+        )}
+
+        <Button title="Set Reminder" onPress={handleSetReminder} />
       </View>
     </ScrollView>
   );
@@ -160,5 +261,30 @@ const styles = StyleSheet.create({
     padding: 12,
     alignItems: 'center',
     borderRadius: 8,
+  },
+  reminderContainer: {
+    marginVertical: 20,
+    padding: 15,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  reminderTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#333',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 15,
+    backgroundColor: '#fff',
   },
 });

@@ -1,16 +1,26 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const chatSchema = new mongoose.Schema(
   {
     senderId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
       required: true,
+      refPath: "senderModel", // dynamic reference (doctor or patient)
     },
     receiverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
       required: true,
+      refPath: "receiverModel", // dynamic reference (doctor or patient)
+    },
+    senderModel: {
+      type: String,
+      required: true,
+      enum: ["Doctor", "Patient"],
+    },
+    receiverModel: {
+      type: String,
+      required: true,
+      enum: ["Doctor", "Patient"],
     },
     message: {
       type: String,
@@ -20,4 +30,4 @@ const chatSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model('Chat', chatSchema);
+module.exports = mongoose.model("Chat", chatSchema);

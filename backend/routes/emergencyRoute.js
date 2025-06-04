@@ -1,7 +1,8 @@
-const express = require('express')
-const { triggerSOS } = require('../controllers/emergencyController')
-const router = express.Router()
+const express = require('express');
+const { sendEmergencyAlert } = require('../controllers/emergencyController');
 
-router.post('/alert', triggerSOS)
+const router = express.Router();
 
-module.exports = router
+router.post('/send-alert', sendEmergencyAlert);
+
+module.exports = router;

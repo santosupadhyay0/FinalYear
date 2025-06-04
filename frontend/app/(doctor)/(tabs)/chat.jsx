@@ -1,109 +1,183 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, Image, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { View, Text, FlatList, TextInput, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchChatThreads } from '@/redux/slices/chatSlice';
+import { useRouter } from 'expo-router';
+import axios from 'axios';
 
-const messages = [
-  {
-    id: '1',
-    name: 'Ritika Sharma',
-    lastMessage: 'Thank you, doctor!',
-    time: '10:45 AM',
-    avatar: 'https://placeimg.com/100/100/people',
-  },
-  {
-    id: '2',
-    name: 'Anil Singh',
-    lastMessage: 'I’ve uploaded my report',
-    time: '9:30 AM',
-    avatar: 'https://placeimg.com/101/101/people',
-  },
-  {
-    id: '3',
-    name: 'Meena Joshi',
-    lastMessage: 'Can we schedule tomorrow?',
-    time: 'Yesterday',
-    avatar: 'https://placeimg.com/102/102/people',
-  },
-];
+const MessageScreen = () => {
+  const currentUser = useSelector((state) => state.doctorAuth.user);
+  const dispatch = useDispatch();
+  const router = useRouter();
 
-export default function DoctorMessages() {
-  const renderItem = ({ item }) => (
-    <TouchableOpacity style={styles.card}>
-      <Image source={{ uri: item.avatar }} style={styles.avatar} />
-      <View style={styles.textContainer}>
-        <Text style={styles.name}>{item.name}</Text>
-        <Text style={styles.message}>{item.lastMessage}</Text>
-      </View>
-      <Text style={styles.time}>{item.time}</Text>
-    </TouchableOpacity>
-  );
+  const { threads, loading, error } = useSelector((state) => state.chat);
+
+  const [search, setSearch] = useState('');
+  const [filteredThreads, setFilteredThreads] = useState([]);
+  const [searchedUsers, setSearchedUsers] = useState([]);
+
+  useEffect(() => {
+    if (currentUser?._id) {
+      dispatch(fetchChatThreads(currentUser._id));
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (search.trim() === '') {
+      setFilteredThreads(threads || []);
+      setSearchedUsers([]);
+    } else {
+      const lower = search.toLowerCase();
+      const matches = (threads || []).filter((item) => {
+        // Identify the other user in the thread
+        const otherUser = item.senderId._id === currentUser._id ? item.receiverId : item.senderId;
+        return otherUser.name.toLowerCase().includes(lower);
+      });
+      setFilteredThreads(matches);
+    }
+  }, [search, threads]);
+
+  const handleSearchChange = async (text) => {
+    setSearch(text);
+    if (text.trim() !== '') {
+      try {
+        const res = await axios.get(`http://localhost:8000/api/users/search?query=${text}`);
+        setSearchedUsers(res.data);
+      } catch (err) {
+        console.error('User search failed:', err.message);
+      }
+    } else {
+      setSearchedUsers([]);
+    }
+  };
+
+  const handleUserSelect = (user) => {
+    router.push({
+      pathname: `screens/chat/${user._id}`,
+      params: {
+        senderId: currentUser._id,
+        receiverId: user._id,
+      },
+    });
+  };
+
+  // Render chat thread item
+  const renderThreadItem = ({ item }) => {
+    const otherUser = item.senderId._id === currentUser._id ? item.receiverId : item.senderId;
+    const lastMessage = item.message || 'No message yet';
+
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() =>
+          router.push({
+            pathname: `screens/chat/${otherUser._id}`,
+            params: {
+              senderId: currentUser._id,
+              receiverId: otherUser._id,
+            },
+          })
+        }
+      >
+        <Image
+          source={{ uri: otherUser.avatar || 'https://via.placeholder.com/50' }}
+          style={styles.avatar}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.name}>{otherUser.name}</Text>
+          <Text style={styles.message} numberOfLines={1}>
+            {lastMessage}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // Render searched user item for starting new chat
+  const renderSearchItem = ({ item }) => {
+    if (item._id === currentUser._id) return null;
+
+    return (
+      <TouchableOpacity style={styles.card} onPress={() => handleUserSelect(item)}>
+        <Image
+          source={{ uri: item.avatar || 'https://via.placeholder.com/50' }}
+          style={styles.avatar}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.name}>{item.name}</Text>
+          <Text style={styles.message}>Start a conversation</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerText}>Messages</Text>
-        <Ionicons name="chatbubble-ellipses-outline" size={24} color="#4A90E2" />
-      </View>
+    <View style={styles.container}>
+      <TextInput
+        placeholder="Search users or threads..."
+        value={search}
+        onChangeText={handleSearchChange}
+        style={styles.searchBar}
+      />
 
       <FlatList
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 20 }}
-        showsVerticalScrollIndicator={false}
+        data={search.trim() ? searchedUsers : filteredThreads}
+        keyExtractor={(item) => item._id}
+        renderItem={search.trim() ? renderSearchItem : renderThreadItem}
+        ListEmptyComponent={
+          <Text style={{ textAlign: 'center', marginTop: 20 }}>
+            {loading ? 'Loading...' : 'No conversations found.'}
+          </Text>
+        }
       />
-    </SafeAreaView>
+
+      {error && (
+        <Text style={{ color: 'red', textAlign: 'center', marginVertical: 10 }}>
+          {error}
+        </Text>
+      )}
+    </View>
   );
-}
+};
+
+export default MessageScreen;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F6F8',
-    paddingHorizontal: 20,
+    backgroundColor: '#F6F6F6',
+    padding: 10,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 15,
+  searchBar: {
+    backgroundColor: '#fff',
+    padding: 10,
+    borderRadius: 10,
     marginBottom: 10,
-  },
-  headerText: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 16,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 12,
     backgroundColor: '#fff',
-    padding: 14,
     borderRadius: 12,
-    marginBottom: 12,
-    elevation: 3,
+    marginBottom: 10,
+    elevation: 2,
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    marginRight: 14,
-  },
-  textContainer: {
-    flex: 1,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
   },
   name: {
-    fontSize: 16,
     fontWeight: '600',
-    color: '#111',
+    fontSize: 16,
+    color: '#333',
   },
   message: {
+    color: '#777',
     fontSize: 14,
-    color: '#666',
     marginTop: 2,
-  },
-  time: {
-    fontSize: 12,
-    color: '#999',
   },
 });

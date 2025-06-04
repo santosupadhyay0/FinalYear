@@ -15,7 +15,7 @@ export default function DoctorTabLayout() {
         options={{
           headerShown:false,
           title: 'Home',
-          tabBarIcon: ({ color }) => <Ionicons name="people" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} />,
         }}
       />
       <Tabs.Screen

@@ -20,23 +20,12 @@ export default function Welcome() {
         <Pressable
           style={({ pressed }) => [
             styles.button,
-            styles.doctorButton,
-            pressed && styles.buttonPressed,
-          ]}
-          onPress={() => router.replace("/(auth)/(doctor)/login")}
-        >
-          <Text style={styles.buttonText}>Continue as Doctor</Text>
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.button,
             styles.patientButton,
             pressed && styles.buttonPressed,
           ]}
-          onPress={() => router.replace("/(auth)/(patient)/login")}
+          onPress={() => router.replace("/(auth)/login")}
         >
-          <Text style={styles.buttonText}>Continue as Patient</Text>
+          <Text style={styles.buttonText}>Continue To App</Text>
         </Pressable>
       </View>
     </View>

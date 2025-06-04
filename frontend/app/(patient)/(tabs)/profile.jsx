@@ -2,21 +2,31 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView } from 'rea
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { useDispatch } from 'react-redux';
-import { logout } from '@/redux/slices/authSlice'; // Update path if needed
+import { logoutPatient } from '@/redux/slices/patientAuthSlice'; // Update path if needed
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 
 export default function ProfileScreen() {
   const dispatch = useDispatch();
 
   const handleLogout = async () => {
-    await AsyncStorage.clear(); // or AsyncStorage.removeItem('token')
-    dispatch(logout());
-    router.replace('/index');
+    await SecureStore.deleteItemAsync('patientToken'); // Clear patient token
+    await SecureStore.deleteItemAsync('patientRefreshToken'); // Clear patient refresh token
+    dispatch(logoutPatient()); // Update Redux state
+    router.replace('/(auth)/login'); // Redirect to login page
   };
 
-  const {user} = useSelector((state)=>state.auth)
+  const {user} = useSelector((state)=>state.patientAuth)
+
+  if (!user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container}>
       {/* Profile Header */}
@@ -153,5 +163,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 6,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
   },
 });
